@@ -3,6 +3,7 @@
     "name": "RecetasApp",
     "slug": "RecetasApp",
     "version": "1.0.0",
+    "scheme": "recetasapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -15,13 +16,19 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.juliom2801.RecetasApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "36dd8e4c-3e64-4fd7-9b7e-1ea7d4d167c0"
+      }
+    }
   }
 }

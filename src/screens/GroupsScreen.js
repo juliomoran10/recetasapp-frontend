@@ -1,68 +1,110 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MOCK_GROUPS as initialGroups, MOCK_RECIPES } from '../data/mockData';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import CustomButton from '../components/CustomButton';
 import CustomSearchSelect from '../components/CustomSearchSelect';
 import Header from '../components/Header';
 import IconButton from '../components/IconButton';
-import { useNavigation } from '@react-navigation/native';
 import { commonStyles } from '../styles/common';
+import { listGroupsApi, getGroupApi, createGroupApi, updateGroupApi, deleteGroupApi } from '../services/groupsApi';
+import { listRecipesApi } from '../services/recipesApi';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const GroupsScreen = () => {
-  const [groups, setGroups] = useState(initialGroups);
+  const [groups, setGroups] = useState([]);
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
-  
+  const [saving, setSaving] = useState(false);
+
   const [isEditing, setIsEditing] = useState(false);
   const [currentGroupId, setCurrentGroupId] = useState(null);
   const [groupName, setGroupName] = useState('');
-  
+  const [selectedRecipes, setSelectedRecipes] = useState([]);
+
   const navigation = useNavigation();
 
-  const [selectedRecipes, setSelectedRecipes] = useState([]);
+  const loadData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [groupsResult, recipesResult] = await Promise.all([
+        listGroupsApi(),
+        listRecipesApi()
+      ]);
+      setGroups(groupsResult.groups || []);
+      setRecipes(recipesResult.recipes || []);
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const openCreateModal = () => {
     setIsEditing(false);
+    setCurrentGroupId(null);
     setGroupName('');
-    setSelectedRecipes([]); 
+    setSelectedRecipes([]);
     setModalVisible(true);
   };
 
-  const openEditModal = (group) => {
-    setIsEditing(true);
-    setCurrentGroupId(group.id);
-    setGroupName(group.name);
-    
-    if (group.recipeCount > 0) {
-      setSelectedRecipes([MOCK_RECIPES[0]]); 
-    } else {
+  const openEditModal = async (group) => {
+    try {
+      setIsEditing(true);
+      setCurrentGroupId(group.id);
+      setGroupName(group.name);
+      setModalVisible(true);
       setSelectedRecipes([]);
+
+      const [groupResult, recipesResult] = await Promise.all([
+        getGroupApi(group.id),
+        listRecipesApi()
+      ]);
+      const allRecipes = recipesResult.recipes || [];
+      const recipeIds = groupResult.group?.recipeIds || [];
+
+      setRecipes(allRecipes);
+      setSelectedRecipes(allRecipes.filter((recipe) => recipeIds.includes(recipe.id)));
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+      setModalVisible(false);
     }
-    setModalVisible(true);
   };
 
-  const handleSaveGroup = () => {
+  const handleSaveGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert('Campo vacío', 'El grupo necesita un nombre.');
       return;
     }
 
-    if (isEditing) {
-      setGroups(groups.map(g => 
-        g.id === currentGroupId 
-          ? { ...g, name: groupName.trim(), recipeCount: selectedRecipes.length } 
-          : g
-      ));
-    } else {
-      const newGroup = {
-        id: String(groups.length + 1),
-        name: groupName.trim(),
-        recipeCount: selectedRecipes.length
-      };
-      setGroups([...groups, newGroup]);
-    }
+    const payload = {
+      name: groupName.trim(),
+      recipeIds: selectedRecipes.map((recipe) => recipe.id)
+    };
 
-    setModalVisible(false);
+    try {
+      setSaving(true);
+
+      if (isEditing) {
+        await updateGroupApi(currentGroupId, payload);
+      } else {
+        await createGroupApi(payload);
+      }
+
+      setModalVisible(false);
+      await loadData();
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteGroup = (id, name) => {
@@ -71,18 +113,29 @@ const GroupsScreen = () => {
       `Si eliminas el grupo "${name}", también se borrarán permanentemente todas las recetas asociadas a él.`,
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar todo', style: 'destructive', onPress: () => setGroups(groups.filter(g => g.id !== id)) }
+        {
+          text: 'Eliminar todo',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGroupApi(id);
+              await loadData();
+            } catch (error) {
+              Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+            }
+          }
+        }
       ]
     );
   };
 
   const renderGroupCard = ({ item }) => (
     <View style={styles.card}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.cardInfo}
-        onPress={() => navigation.navigate('GroupRecipesDetail', { 
+        onPress={() => navigation.navigate('GroupRecipesDetail', {
           groupName: item.name,
-          groupId: item.id 
+          groupId: item.id
         })}
       >
         <View style={styles.titleContainer}>
@@ -99,6 +152,14 @@ const GroupsScreen = () => {
     </View>
   );
 
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#3B71F3" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Header title="Grupos" />
@@ -107,16 +168,19 @@ const GroupsScreen = () => {
         keyExtractor={(item) => item.id}
         renderItem={renderGroupCard}
         contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No tienes grupos todavía. Crea uno con el botón +</Text>
+        }
       />
 
       <Modal animationType="slide" transparent={true} visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{isEditing ? 'Editar Grupo' : 'Nuevo Grupo'}</Text>
-            
+
             <Text style={styles.subLabel}>Nombre del Grupo</Text>
             <TextInput
               placeholder="Ej. Comida Mexicana"
@@ -126,19 +190,19 @@ const GroupsScreen = () => {
               style={styles.modalInput}
             />
 
-            <CustomSearchSelect 
+            <CustomSearchSelect
               label="Agregar Recetas al Grupo"
               placeholder="Escribe para buscar recetas (ej. Pasta)..."
-              searchKey="title" 
-              data={MOCK_RECIPES}
+              searchKey="title"
+              data={recipes}
               selectedItems={selectedRecipes}
               onAddItem={(item) => setSelectedRecipes([...selectedRecipes, item])}
-              onRemoveItem={(id) => setSelectedRecipes(selectedRecipes.filter(r => r.id !== id))}
+              onRemoveItem={(id) => setSelectedRecipes(selectedRecipes.filter((recipe) => recipe.id !== id))}
             />
 
             <View style={styles.modalButtons}>
               <View style={{ flex: 1, marginRight: 10 }}>
-                <CustomButton text={isEditing ? "Guardar" : "Crear"} onPress={handleSaveGroup} />
+                <CustomButton text={saving ? 'Guardando...' : (isEditing ? 'Guardar' : 'Crear')} onPress={handleSaveGroup} />
               </View>
               <View style={{ flex: 1 }}>
                 <CustomButton text="Cancelar" onPress={() => setModalVisible(false)} type="TERTIARY" fgColor="gray" />
@@ -157,7 +221,18 @@ const GroupsScreen = () => {
 
 const styles = StyleSheet.create({
   container: { ...commonStyles.pageContainer },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   listContainer: { paddingHorizontal: 15, paddingTop: 12, paddingBottom: 80 },
+  emptyText: {
+    textAlign: 'center',
+    color: 'gray',
+    marginTop: 40,
+    fontSize: 15,
+    fontStyle: 'italic'
+  },
   card: {
     backgroundColor: 'white',
     padding: 15,
@@ -170,14 +245,13 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 4
   },
   cardInfo: { flex: 1 },
   titleContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 5 },
   groupName: { fontSize: 18, fontWeight: 'bold', color: '#051C60' },
   groupCount: { fontSize: 13, color: 'gray' },
   actions: { flexDirection: 'row' },
-  actionButton: { padding: 10, marginLeft: 5 },
   fab: {
     position: 'absolute',
     bottom: 25,
@@ -188,14 +262,14 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
+    elevation: 5
   },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 20
   },
   modalContent: {
     backgroundColor: 'white',
@@ -203,7 +277,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     padding: 20,
     borderRadius: 15,
-    elevation: 10,
+    elevation: 10
   },
   modalTitle: {
     fontSize: 22,

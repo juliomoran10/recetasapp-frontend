@@ -3,6 +3,8 @@ import { Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import AuthForm from '../components/AuthForm';
 import { useNavigation } from '@react-navigation/native';
 import { isValidPassword, passwordValidationMessage } from '../utils/validation';
+import { registerApi } from '../services/authApi';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const SignUpScreen = () => {
   const [username, setUsername] = useState('');
@@ -11,7 +13,7 @@ const SignUpScreen = () => {
   const [passwordRepeat, setPasswordRepeat] = useState('');
   const navigation = useNavigation();
 
-  const onRegisterPressed = ({ username: u, email: e, password: p, passwordRepeat: pr }) => {
+  const onRegisterPressed = async ({ username: u, email: e, password: p, passwordRepeat: pr }) => {
     if (!u.trim() || !e.trim() || !p.trim() || !pr.trim()) {
       Alert.alert('Campos incompletos', 'Por favor, rellena todos los campos del formulario.');
       return;
@@ -33,7 +35,13 @@ const SignUpScreen = () => {
       return;
     }
 
-    navigation.navigate('ConfirmEmail');
+    try {
+      await registerApi({ username: u.trim(), email: e.trim(), password: p });
+      Alert.alert('Cuenta creada', 'Tu cuenta fue registrada. Ya puedes iniciar sesión.');
+      navigation.navigate('SignIn');
+    } catch (error) {
+      Alert.alert('Registro fallido', getAuthErrorMessage(error.payload?.error));
+    }
   };
 
   return (

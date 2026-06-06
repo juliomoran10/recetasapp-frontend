@@ -1,27 +1,85 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MOCK_RECIPES } from '../data/mockData'; 
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import RecipeCard from '../components/RecipeCard';
 import Header from '../components/Header';
 import { commonStyles } from '../styles/common';
+import { listRecipesApi, deleteRecipeApi } from '../services/recipesApi';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const MyRecipesScreen = () => {
   const navigation = useNavigation();
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadRecipes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await listRecipesApi({ mine: true });
+      setRecipes(result.recipes || []);
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadRecipes();
+    }, [loadRecipes])
+  );
+
+  const handleDeleteRecipe = (recipe) => {
+    Alert.alert(
+      'Eliminar receta',
+      `¿Eliminar "${recipe.title}"? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRecipeApi(recipe.id);
+              await loadRecipes();
+            } catch {
+              Alert.alert('Error', 'No se pudo eliminar la receta.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   const renderRecipeCard = ({ item }) => (
-    <RecipeCard item={item} onPress={() => navigation.navigate('RecipeDetail', { recipe: item })} />
+    <RecipeCard
+      item={item}
+      onPress={() => navigation.navigate('RecipeDetail', { recipe: item })}
+      onDelete={item.isOwner ? () => handleDeleteRecipe(item) : undefined}
+    />
   );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#3B71F3" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container]}>
       <Header title="Mis Recetas" />
       <FlatList
-        data={MOCK_RECIPES} 
-        keyExtractor={(item) => item.id} 
-        renderItem={renderRecipeCard} 
+        data={recipes}
+        keyExtractor={(item) => item.id}
+        renderItem={renderRecipeCard}
         contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>Aún no tienes recetas. Crea la primera con el botón +</Text>
+        }
       />
 
       <TouchableOpacity
@@ -35,52 +93,24 @@ const MyRecipesScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { 
+  container: {
     ...commonStyles.pageContainer
+  },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center'
   },
   listContainer: {
     paddingHorizontal: 15,
     paddingTop: 12,
-    paddingBottom: 80, 
+    paddingBottom: 80
   },
-  card: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 15,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    elevation: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-  },
-  cardInfo: {
-    flex: 1,
-    marginRight: 10,
-  },
-  recipeTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#051C60',
-    marginBottom: 5,
-  },
-  recipeDescription: {
-    fontSize: 14,
+  emptyText: {
+    textAlign: 'center',
     color: 'gray',
-    marginBottom: 8,
-  },
-  recipeTime: {
-    fontSize: 12,
-    color: '#3B71F3',
-    fontWeight: 'bold',
-  },
-  actions: {
-    justifyContent: 'space-around',
-  },
-  actionButton: {
-    padding: 5,
+    marginTop: 40,
+    fontSize: 15,
+    fontStyle: 'italic'
   },
   fab: {
     position: 'absolute',
@@ -96,7 +126,7 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
-    shadowRadius: 3,
+    shadowRadius: 3
   }
 });
 

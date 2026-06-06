@@ -1,52 +1,100 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
 import CustomSearchSelect from '../components/CustomSearchSelect';
 import ImageSelector from '../components/ImageSelector';
 import { commonStyles } from '../styles/common';
-import { useNavigation } from '@react-navigation/native';
-import { MOCK_GROUPS } from '../data/mockData'; 
+import { createRecipeApi, updateRecipeApi } from '../services/recipesApi';
+import { listGroupsApi } from '../services/groupsApi';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const CreateRecipeScreen = () => {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [time, setTime] = useState('');
-  const [ingredients, setIngredients] = useState('');
-  const [steps, setSteps] = useState('');
-  const [selectedGroups, setSelectedGroups] = useState([]);
-  const [recipeImage, setRecipeImage] = useState(null);
-
   const navigation = useNavigation();
+  const route = useRoute();
+  const editingRecipe = route.params?.recipe;
 
-  const onSavePressed = () => {
+  const [title, setTitle] = useState(editingRecipe?.title || '');
+  const [description, setDescription] = useState(editingRecipe?.description || '');
+  const [time, setTime] = useState(editingRecipe?.time || '');
+  const [ingredients, setIngredients] = useState(editingRecipe?.ingredients?.join(', ') || '');
+  const [steps, setSteps] = useState(editingRecipe?.steps?.join('\n') || '');
+  const [selectedGroups, setSelectedGroups] = useState([]);
+  const [recipeImage, setRecipeImage] = useState(editingRecipe?.image || editingRecipe?.recipeImage || null);
+  const [groups, setGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const loadGroups = useCallback(async () => {
+    try {
+      setLoadingGroups(true);
+      const result = await listGroupsApi();
+      const allGroups = result.groups || [];
+      setGroups(allGroups);
+
+      if (editingRecipe?.groupIds?.length) {
+        setSelectedGroups(allGroups.filter((g) => editingRecipe.groupIds.includes(g.id)));
+      }
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setLoadingGroups(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadGroups();
+    }, [loadGroups])
+  );
+
+  const onSavePressed = async () => {
     if (!title.trim() || !ingredients.trim() || !steps.trim()) {
       Alert.alert('Campos incompletos', 'Por favor ingresa al menos el título, ingredientes y los pasos.');
       return;
     }
 
-    const associatedGroupIds = selectedGroups.map(g => g.id);
-    
-    console.log("Datos de la receta listos para el backend:", {
-      title, description, time, ingredients, steps, associatedGroupIds, recipeImage
-    });
+    try {
+      setSaving(true);
+      const payload = {
+        title: title.trim(),
+        description: description.trim(),
+        time: time.trim(),
+        ingredients,
+        steps,
+        groupIds: selectedGroups.map((group) => group.id),
+        image: recipeImage
+      };
 
-    Alert.alert('¡Éxito!', `Receta guardada con éxito ${recipeImage ? 'con imagen' : ''} y vinculada a ${associatedGroupIds.length} grupo(s).`);
-    navigation.goBack();
+      if (editingRecipe) {
+        await updateRecipeApi(editingRecipe.id, payload);
+        Alert.alert('¡Éxito!', 'Receta actualizada correctamente.');
+      } else {
+        await createRecipeApi(payload);
+        Alert.alert('¡Éxito!', 'Receta guardada con éxito.');
+      }
+
+      navigation.goBack();
+    } catch (error) {
+      Alert.alert('Error al guardar', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={{ flex: 1 }}
     >
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Crear Nueva Receta</Text>
+        <Text style={styles.title}>{editingRecipe ? 'Editar Receta' : 'Crear Nueva Receta'}</Text>
 
         <Text style={styles.labelCenter}>Foto del Platillo</Text>
-        <ImageSelector 
-          imageUri={recipeImage} 
-          onImageSelected={setRecipeImage} 
+        <ImageSelector
+          imageUri={recipeImage}
+          onImageSelected={setRecipeImage}
           placeholderText="Subir foto del plato"
         />
 
@@ -65,17 +113,21 @@ const CreateRecipeScreen = () => {
         <Text style={styles.label}>Pasos a seguir</Text>
         <CustomInput placeholder="Describe cómo prepararlo..." value={steps} setValue={setSteps} />
 
-        <CustomSearchSelect 
-          label="Asociar a Grupos"
-          placeholder="Escribe para buscar un grupo..."
-          data={MOCK_GROUPS}
-          selectedItems={selectedGroups}
-          onAddItem={(item) => setSelectedGroups([...selectedGroups, item])}
-          onRemoveItem={(id) => setSelectedGroups(selectedGroups.filter(g => g.id !== id))}
-        />
+        {loadingGroups ? (
+          <ActivityIndicator color="#3B71F3" style={{ marginTop: 20 }} />
+        ) : (
+          <CustomSearchSelect
+            label="Asociar a Grupos"
+            placeholder="Escribe para buscar un grupo..."
+            data={groups}
+            selectedItems={selectedGroups}
+            onAddItem={(item) => setSelectedGroups([...selectedGroups, item])}
+            onRemoveItem={(id) => setSelectedGroups(selectedGroups.filter((group) => group.id !== id))}
+          />
+        )}
 
         <View style={styles.buttonContainer}>
-          <CustomButton text="Guardar Receta" onPress={onSavePressed} />
+          <CustomButton text={saving ? 'Guardando...' : 'Guardar Receta'} onPress={onSavePressed} />
           <CustomButton text="Cancelar" onPress={() => navigation.goBack()} type="TERTIARY" fgColor="gray" />
         </View>
       </ScrollView>

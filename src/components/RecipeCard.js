@@ -3,11 +3,18 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../styles/common';
 
-const RecipeCard = ({ item, onPress }) => {
+const RecipeCard = ({ item, onPress, onDelete }) => {
   return (
     <View style={styles.card}>
       <View style={styles.cardContent}>
-        <Text style={styles.recipeTitle}>{item.title}</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.recipeTitle} numberOfLines={1}>{item.title}</Text>
+          {onDelete && (
+            <TouchableOpacity onPress={onDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="trash-outline" size={18} color="#e3342f" />
+            </TouchableOpacity>
+          )}
+        </View>
         <Text style={styles.recipeDescription} numberOfLines={2}>{item.description}</Text>
 
         <View style={styles.metaRow}>
@@ -37,7 +44,8 @@ const styles = StyleSheet.create({
     borderLeftColor: COLORS.primary,
   },
   cardContent: { padding: 15 },
-  recipeTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, marginBottom: 5 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
+  recipeTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text, flex: 1 },
   recipeDescription: { fontSize: 14, color: 'gray', marginBottom: 12 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   recipeTime: { fontSize: 13, color: '#555', fontWeight: '600' },

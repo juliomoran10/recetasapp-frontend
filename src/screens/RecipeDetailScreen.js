@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Image, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform, Image, Dimensions, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import CustomButton from '../components/CustomButton';
+import { deleteRecipeApi } from '../services/recipesApi';
 import { commonStyles, COLORS } from '../styles/common';
 
 const { width } = Dimensions.get('window');
@@ -14,6 +15,28 @@ const RecipeDetailScreen = () => {
   const { recipe } = route.params;
 
   const defaultRecipeImage = 'https://images.unsplash.com/photo-1495521821757-a1efb6729352?q=80&w=600&auto=format&fit=crop';
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Eliminar receta',
+      '¿Estás seguro de que quieres eliminar esta receta? Esta acción no se puede deshacer.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteRecipeApi(recipe.id);
+              navigation.goBack();
+            } catch (error) {
+              Alert.alert('Error', 'No se pudo eliminar la receta.');
+            }
+          }
+        }
+      ]
+    );
+  };
 
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -27,6 +50,16 @@ const RecipeDetailScreen = () => {
         <TouchableOpacity style={styles.floatingBackButton} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#051C60" />
         </TouchableOpacity>
+        {recipe.isOwner && (
+          <>
+            <TouchableOpacity style={styles.floatingEditButton} onPress={() => navigation.navigate('CreateRecipe', { recipe })}>
+              <Ionicons name="pencil-outline" size={22} color="#3B71F3" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.floatingDeleteButton} onPress={handleDelete}>
+              <Ionicons name="trash-outline" size={22} color="#e3342f" />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       <View style={styles.contentContainer}>
@@ -81,6 +114,38 @@ const styles = StyleSheet.create({
   recipeImage: {
     width: '100%',
     height: '100%',
+  },
+  floatingEditButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 25,
+    right: 72,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 5,
+  },
+  floatingDeleteButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : 25,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 5,
   },
   floatingBackButton: {
     position: 'absolute',

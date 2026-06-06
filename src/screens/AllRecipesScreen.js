@@ -1,32 +1,53 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Platform } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { MOCK_RECIPES } from '../data/mockData';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import Header from '../components/Header';
 import RecipeCard from '../components/RecipeCard';
 import { commonStyles } from '../styles/common';
+import { listRecipesApi } from '../services/recipesApi';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const AllRecipesScreen = () => {
   const [search, setSearch] = useState('');
+  const [recipes, setRecipes] = useState([]);
+  const [loading, setLoading] = useState(true);
   const navigation = useNavigation();
   const route = useRoute();
 
   const groupName = route.params?.groupName;
   const groupId = route.params?.groupId;
 
-  const sortedRecipes = [...MOCK_RECIPES].sort((a, b) => 
-    a.title.localeCompare(b.title)
+  const loadRecipes = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await listRecipesApi({ groupId });
+      setRecipes(result.recipes || []);
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setLoading(false);
+    }
+  }, [groupId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadRecipes();
+    }, [loadRecipes])
   );
 
-  const groupFilteredRecipes = groupId 
-    ? sortedRecipes.filter((_, index) => groupId === "1" ? index % 2 === 0 : index % 2 !== 0)
-    : sortedRecipes;
+  const filteredRecipes = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) {
+      return recipes;
+    }
 
-  const filteredRecipes = groupFilteredRecipes.filter(recipe =>
-    recipe.title.toLowerCase().includes(search.toLowerCase()) ||
-    recipe.description.toLowerCase().includes(search.toLowerCase())
-  );
+    return recipes.filter(
+      (recipe) =>
+        recipe.title.toLowerCase().includes(term) ||
+        String(recipe.description || '').toLowerCase().includes(term)
+    );
+  }, [recipes, search]);
 
   const renderGlobalRecipeCard = ({ item }) => (
     <RecipeCard item={item} onPress={() => navigation.navigate('RecipeDetail', { recipe: item })} />
@@ -43,7 +64,7 @@ const AllRecipesScreen = () => {
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="gray" style={styles.searchIcon} />
         <TextInput
-          placeholder={groupName ? `Buscar en ${groupName}...` : "Buscar recetas globales..."}
+          placeholder={groupName ? `Buscar en ${groupName}...` : 'Buscar recetas globales...'}
           placeholderTextColor="#999"
           value={search}
           onChangeText={setSearch}
@@ -56,33 +77,32 @@ const AllRecipesScreen = () => {
         )}
       </View>
 
-      <FlatList
-        data={filteredRecipes}
-        keyExtractor={(item) => item.id}
-        renderItem={renderGlobalRecipeCard}
-        contentContainerStyle={styles.listContainer}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No hay recetas en este grupo que coincidan.</Text>
-        }
-      />
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#3B71F3" />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredRecipes}
+          keyExtractor={(item) => item.id}
+          renderItem={renderGlobalRecipeCard}
+          contentContainerStyle={styles.listContainer}
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>No hay recetas que coincidan.</Text>
+          }
+        />
+      )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { ...commonStyles.pageContainer },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
-    paddingBottom: 15,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e8e8e8',
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
-  backButton: { padding: 5, marginRight: 15 },
-  groupHeaderTitle: { fontSize: 18, fontWeight: 'bold', color: '#051C60' },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -97,31 +117,12 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 2
   },
   searchIcon: { marginRight: 10 },
   searchInput: { flex: 1, color: '#333', fontSize: 15 },
   listContainer: { paddingHorizontal: 15, paddingBottom: 20 },
-  card: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    marginBottom: 15,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    borderLeftWidth: 4,
-    borderLeftColor: '#3B71F3', 
-  },
-  cardContent: { padding: 15 },
-  recipeTitle: { fontSize: 18, fontWeight: 'bold', color: '#051C60', marginBottom: 5 },
-  recipeDescription: { fontSize: 14, color: 'gray', marginBottom: 12 },
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  recipeTime: { fontSize: 13, color: '#555', fontWeight: '600' },
-  viewButton: { flexDirection: 'row', alignItems: 'center' },
-  viewButtonText: { color: '#3B71F3', fontSize: 14, fontWeight: 'bold', marginRight: 3 },
-  emptyText: { textAlign: 'center', color: 'gray', marginTop: 40, fontSize: 15, fontStyle: 'italic' },
+  emptyText: { textAlign: 'center', color: 'gray', marginTop: 40, fontSize: 15, fontStyle: 'italic' }
 });
 
 export default AllRecipesScreen;

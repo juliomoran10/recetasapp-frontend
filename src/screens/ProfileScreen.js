@@ -1,27 +1,57 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { MOCK_RECIPES, MOCK_GROUPS } from '../data/mockData';
+import React, { useCallback, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import CustomButton from '../components/CustomButton';
 import ImageSelector from '../components/ImageSelector';
 import Header from '../components/Header';
 import ActionRow from '../components/ActionRow';
 import StatBox from '../components/StatBox';
 import { commonStyles, COLORS } from '../styles/common';
+import { getProfileApi, updateProfileApi, deleteAccountApi } from '../services/profileApi';
+import { logoutApi } from '../services/authApi';
+import { clearToken } from '../services/sessionStorage';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
 
   const [user, setUser] = useState({
-    name: 'Chef Ejecutivo',
-    email: 'chef.usuario@correo.com',
-    avatar: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?q=80&w=200&auto=format&fit=crop'
+    name: '',
+    email: '',
+    avatar: null
   });
+  const [stats, setStats] = useState({ recipeCount: 0, groupCount: 0 });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [editModalVisible, setEditModalVisible] = useState(false);
-  const [inputName, setInputName] = useState(user.name);
-  const [inputAvatar, setInputAvatar] = useState(user.avatar);
+  const [inputName, setInputName] = useState('');
+  const [inputAvatar, setInputAvatar] = useState(null);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      setLoading(true);
+      const result = await getProfileApi();
+      const profile = result.profile;
+
+      setUser({
+        name: profile.name,
+        email: profile.email,
+        avatar: profile.avatar
+      });
+      setStats(profile.stats || { recipeCount: 0, groupCount: 0 });
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const handleSignOut = () => {
     Alert.alert(
@@ -29,15 +59,21 @@ const ProfileScreen = () => {
       '¿Estás seguro de que deseas salir de tu cuenta?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Salir', 
-          style: 'destructive', 
-          onPress: () => {
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logoutApi();
+            } catch {
+              // clearToken already runs in logoutApi finally block
+            }
+
             navigation.reset({
               index: 0,
-              routes: [{ name: 'SignIn' }],
+              routes: [{ name: 'SignIn' }]
             });
-          } 
+          }
         }
       ]
     );
@@ -49,16 +85,22 @@ const ProfileScreen = () => {
       '¿Estás seguro de que deseas eliminar tu cuenta? Ya no podrás iniciar sesión ni gestionar tu perfil.',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Eliminar cuenta', 
-          style: 'destructive', 
-          onPress: () => {
-            Alert.alert('Cuenta eliminada', 'Tu perfil ha sido dado de baja con éxito.');
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'SignIn' }],
-            });
-          } 
+        {
+          text: 'Eliminar cuenta',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAccountApi();
+              await clearToken();
+              Alert.alert('Cuenta eliminada', 'Tu perfil ha sido dado de baja con éxito.');
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'SignIn' }]
+              });
+            } catch (error) {
+              Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+            }
+          }
         }
       ]
     );
@@ -70,37 +112,63 @@ const ProfileScreen = () => {
     setEditModalVisible(true);
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (!inputName.trim()) {
       Alert.alert('Campo vacío', 'El nombre de perfil no puede estar vacío.');
       return;
     }
-    setUser({
-      ...user,
-      name: inputName.trim(),
-      avatar: inputAvatar
-    });
-    setEditModalVisible(false);
+
+    try {
+      setSaving(true);
+      const result = await updateProfileApi({
+        name: inputName.trim(),
+        avatar: inputAvatar
+      });
+
+      const profile = result.profile;
+      setUser({
+        name: profile.name,
+        email: profile.email,
+        avatar: profile.avatar
+      });
+      setStats(profile.stats || stats);
+      setEditModalVisible(false);
+    } catch (error) {
+      Alert.alert('Error', getAuthErrorMessage(error.payload?.error));
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#3B71F3" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       <Header title="Perfil" />
-      
+
       <View style={styles.profileCard}>
-        <Image 
-          source={{ uri: user.avatar }} 
-          style={styles.avatar} 
-        />
+        {user.avatar ? (
+          <Image source={{ uri: user.avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.avatarPlaceholder]}>
+            <Text style={styles.avatarInitial}>{user.name?.charAt(0)?.toUpperCase() || '?'}</Text>
+          </View>
+        )}
         <Text style={styles.userName}>{user.name}</Text>
         <Text style={styles.userEmail}>{user.email}</Text>
       </View>
 
       <Text style={styles.sectionTitle}>Tu actividad</Text>
       <View style={styles.statsContainer}>
-        <StatBox icon="restaurant" color="#3B71F3" number={MOCK_RECIPES.length} label="Mis Recetas" />
+        <StatBox icon="restaurant" color="#3B71F3" number={stats.recipeCount} label="Mis Recetas" />
         <View style={styles.verticalDivider} />
-        <StatBox icon="folder" color="#4765A9" number={MOCK_GROUPS.length} label="Grupos" />
+        <StatBox icon="folder" color="#4765A9" number={stats.groupCount} label="Grupos" />
       </View>
 
       <Text style={styles.sectionTitle}>Ajustes de cuenta</Text>
@@ -117,17 +185,17 @@ const ProfileScreen = () => {
       </View>
 
       <Modal animationType="slide" transparent={true} visible={editModalVisible} onRequestClose={() => setEditModalVisible(false)}>
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.modalOverlay}
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Editar Perfil</Text>
-            
+
             <Text style={styles.subLabel}>Foto de Perfil</Text>
-            <ImageSelector 
-              imageUri={inputAvatar} 
-              onImageSelected={setInputAvatar} 
+            <ImageSelector
+              imageUri={inputAvatar}
+              onImageSelected={setInputAvatar}
               placeholderText="Subir Foto"
             />
 
@@ -142,7 +210,7 @@ const ProfileScreen = () => {
 
             <View style={styles.modalButtons}>
               <View style={{ flex: 1, marginRight: 10 }}>
-                <CustomButton text="Guardar" onPress={handleSaveChanges} />
+                <CustomButton text={saving ? 'Guardando...' : 'Guardar'} onPress={handleSaveChanges} />
               </View>
               <View style={{ flex: 1 }}>
                 <CustomButton text="Cancelar" onPress={() => setEditModalVisible(false)} type="TERTIARY" fgColor="gray" />
@@ -157,6 +225,10 @@ const ProfileScreen = () => {
 
 const styles = StyleSheet.create({
   container: { ...commonStyles.pageContainer },
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
   scrollContent: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 },
   profileCard: {
     backgroundColor: 'white',
@@ -174,6 +246,16 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   avatar: { width: 90, height: 90, borderRadius: 45, marginBottom: 15, backgroundColor: '#ccc' },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#E7EAF4'
+  },
+  avatarInitial: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#4765A9'
+  },
   userName: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 },
   userEmail: { fontSize: 14, color: 'gray' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#051C60', marginBottom: 12, marginLeft: 5 },
@@ -186,11 +268,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'space-around',
-    marginBottom: 25,
+    marginBottom: 25
   },
-  statBox: { alignItems: 'center', flex: 1 },
-  statNumber: { fontSize: 18, fontWeight: 'bold', color: '#051C60', marginTop: 5 },
-  statLabel: { fontSize: 12, color: 'gray', marginTop: 2 },
   verticalDivider: { width: 1, height: '70%', backgroundColor: '#e8e8e8' },
   optionsBox: {
     backgroundColor: 'white',
@@ -198,11 +277,8 @@ const styles = StyleSheet.create({
     borderColor: '#e8e8e8',
     borderWidth: 1,
     paddingHorizontal: 15,
-    marginBottom: 30,
+    marginBottom: 30
   },
-  optionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14 },
-  optionLeft: { flexDirection: 'row', alignItems: 'center' },
-  optionText: { fontSize: 15, color: '#333', marginLeft: 12, fontWeight: '500' },
   horizontalDivider: { height: 1, backgroundColor: '#F0F0F0' },
   buttonWrapper: { marginTop: 10, marginBottom: 20 },
   modalOverlay: {
@@ -210,7 +286,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 20
   },
   modalContent: {
     backgroundColor: 'white',
@@ -218,7 +294,7 @@ const styles = StyleSheet.create({
     maxWidth: 340,
     padding: 20,
     borderRadius: 15,
-    elevation: 10,
+    elevation: 10
   },
   modalTitle: {
     fontSize: 22,

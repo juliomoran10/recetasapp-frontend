@@ -5,6 +5,8 @@ import { commonStyles, COLORS } from '../styles/common';
 import { useNavigation } from '@react-navigation/native';
 import LogoImg from '../../assets/logo.png'; 
 import { isValidPassword, passwordValidationMessage } from '../utils/validation';
+import { loginAndSaveSession } from '../services/authApi';
+import { getAuthErrorMessage } from '../services/authMessages';
 
 const SignInScreen = () => {
   const [username, setUsername] = useState('');
@@ -12,7 +14,7 @@ const SignInScreen = () => {
   const { height } = useWindowDimensions();
   const navigation = useNavigation();
 
-  const handleSignInWithValues = ({ username: u, password: p }) => {
+  const handleSignInWithValues = async ({ username: u, password: p }) => {
     if (!u?.trim() || !p?.trim()) {
       Alert.alert('Campos obligatorios', 'Por favor, rellena todos los campos para ingresar.');
       return;
@@ -23,10 +25,15 @@ const SignInScreen = () => {
       return;
     }
 
-    setUsername(u);
-    setPassword(p);
-
-    navigation.navigate('Home');
+    try {
+      await loginAndSaveSession({ username: u.trim(), password: p });
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'Home' }]
+      });
+    } catch (error) {
+      Alert.alert('Inicio de sesión fallido', getAuthErrorMessage(error.payload?.error));
+    }
   };
 
   return (

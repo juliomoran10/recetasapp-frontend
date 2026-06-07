@@ -151,10 +151,12 @@ const GroupsScreen = () => {
         <Text style={styles.groupCount}>{item.recipeCount} recetas asociadas</Text>
       </TouchableOpacity>
 
-      <View style={styles.actions}>
-        <IconButton name="pencil" onPress={() => openEditModal(item)} />
-        <IconButton name="trash" color="#e3342f" onPress={() => handleDeleteGroup(item.id, item.name)} />
-      </View>
+      {item.isOwner && (
+        <View style={styles.actions}>
+          <IconButton name="pencil" onPress={() => openEditModal(item)} />
+          <IconButton name="trash" color="#e3342f" onPress={() => handleDeleteGroup(item.id, item.name)} />
+        </View>
+      )}
     </View>
   );
 

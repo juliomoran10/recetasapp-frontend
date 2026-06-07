@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import CustomInput from '../components/CustomInput';
 import CustomButton from '../components/CustomButton';
@@ -18,7 +18,16 @@ const CreateRecipeScreen = () => {
 
   const [title, setTitle] = useState(editingRecipe?.title || '');
   const [description, setDescription] = useState(editingRecipe?.description || '');
-  const [time, setTime] = useState(editingRecipe?.time || '');
+  const [timeValue, setTimeValue] = useState(() => {
+    const t = editingRecipe?.time || '';
+    const parts = t.match(/^(\d+)\s*(min|h)$/);
+    return parts ? parts[1] : '';
+  });
+  const [timeUnit, setTimeUnit] = useState(() => {
+    const t = editingRecipe?.time || '';
+    const parts = t.match(/^(\d+)\s*(min|h)$/);
+    return parts ? parts[2] : 'min';
+  });
   const [ingredients, setIngredients] = useState(editingRecipe?.ingredients?.join(', ') || '');
   const [steps, setSteps] = useState(editingRecipe?.steps?.join('\n') || '');
   const [selectedGroups, setSelectedGroups] = useState([]);
@@ -56,6 +65,20 @@ const CreateRecipeScreen = () => {
       return;
     }
 
+    const num = parseInt(timeValue, 10);
+    if (!timeValue.trim() || isNaN(num) || num < 1) {
+      Alert.alert('Tiempo inválido', 'Ingresa un número positivo.');
+      return;
+    }
+    if (timeUnit === 'min' && num > 59) {
+      Alert.alert('Tiempo inválido', 'Los minutos deben ser entre 1 y 59.');
+      return;
+    }
+    if (timeUnit === 'h' && num > 24) {
+      Alert.alert('Tiempo inválido', 'Las horas deben ser entre 1 y 24.');
+      return;
+    }
+
     if (title.trim().length > RECIPE_RULES.titleMax) {
       Alert.alert('Título muy largo', `El título no puede exceder ${RECIPE_RULES.titleMax} caracteres.`);
       return;
@@ -85,7 +108,7 @@ const CreateRecipeScreen = () => {
       const payload = {
         title: title.trim(),
         description: description.trim(),
-        time: time.trim(),
+        time: `${parseInt(timeValue, 10)} ${timeUnit}`,
         ingredients,
         steps,
         groupIds: selectedGroups.map((group) => group.id),
@@ -123,19 +146,40 @@ const CreateRecipeScreen = () => {
           placeholderText="Subir foto del plato"
         />
 
-        <Text style={styles.label}>Título de la Receta ({RECIPE_RULES.titleMax} carac.)</Text>
+        <Text style={styles.label}>Título de la Receta</Text>
         <CustomInput placeholder="Ej. Arepas de Queso" value={title} setValue={setTitle} maxLength={RECIPE_RULES.titleMax} />
 
-        <Text style={styles.label}>Descripción breve ({RECIPE_RULES.descriptionMax} carac.)</Text>
+        <Text style={styles.label}>Descripción Breve</Text>
         <CustomInput placeholder="Ej. Deliciosas arepas rellenas..." value={description} setValue={setDescription} maxLength={RECIPE_RULES.descriptionMax} />
 
-        <Text style={styles.label}>Tiempo de preparación</Text>
-        <CustomInput placeholder="Ej. 30 min" value={time} setValue={setTime} />
+        <Text style={styles.label}>Tiempo de Preparación</Text>
+        <View style={styles.timeRow}>
+          <CustomInput
+            placeholder="30"
+            value={timeValue}
+            setValue={setTimeValue}
+            keyboardType="numeric"
+            maxLength={2}
+            containerStyle={{ flex: 1, marginRight: 8 }}
+          />
+          <TouchableOpacity
+            style={[styles.unitBtn, timeUnit === 'min' && styles.unitBtnActive]}
+            onPress={() => setTimeUnit('min')}
+          >
+            <Text style={[styles.unitBtnText, timeUnit === 'min' && styles.unitBtnTextActive]}>min</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.unitBtn, timeUnit === 'h' && styles.unitBtnActive]}
+            onPress={() => setTimeUnit('h')}
+          >
+            <Text style={[styles.unitBtnText, timeUnit === 'h' && styles.unitBtnTextActive]}>h</Text>
+          </TouchableOpacity>
+        </View>
 
-        <Text style={styles.label}>Ingredientes (separados por coma, máx. {RECIPE_RULES.ingredientMax} c/u)</Text>
+        <Text style={styles.label}>Ingredientes (separados por coma)</Text>
         <CustomInput placeholder="Ej. Harina, Sal, Agua, Queso" value={ingredients} setValue={setIngredients} />
 
-        <Text style={styles.label}>Pasos a seguir (uno por línea, máx. {RECIPE_RULES.stepMax} c/u)</Text>
+        <Text style={styles.label}>Pasos a seguir</Text>
         <CustomInput placeholder="Describe cómo prepararlo..." value={steps} setValue={setSteps} multiline />
 
         {loadingGroups ? (
@@ -166,7 +210,20 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: 'bold', color: '#051C60', marginBottom: 20, marginTop: 10 },
   label: { fontSize: 14, fontWeight: 'bold', color: 'gray', marginTop: 15, marginBottom: -5, marginLeft: 5 },
   labelCenter: { fontSize: 14, fontWeight: 'bold', color: 'gray', marginTop: 5, marginBottom: 5, textAlign: 'center' },
-  buttonContainer: { marginTop: 25, marginBottom: 30 }
+  buttonContainer: { marginTop: 25, marginBottom: 30 },
+  timeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  unitBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    borderRadius: 5,
+    backgroundColor: 'white',
+    marginLeft: 6
+  },
+  unitBtnActive: { backgroundColor: '#3B71F3', borderColor: '#3B71F3' },
+  unitBtnText: { fontSize: 14, color: '#333' },
+  unitBtnTextActive: { color: 'white', fontWeight: 'bold' }
 });
 
 export default CreateRecipeScreen;

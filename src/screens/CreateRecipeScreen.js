@@ -96,7 +96,7 @@ const CreateRecipeScreen = () => {
       return;
     }
 
-    const stepList = steps.split('\n').map(s => s.trim()).filter(Boolean);
+    const stepList = steps.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
     const longStep = stepList.find(s => s.length > RECIPE_RULES.stepMax);
     if (longStep) {
       Alert.alert('Paso muy largo', `Cada paso debe tener máximo ${RECIPE_RULES.stepMax} caracteres.`);

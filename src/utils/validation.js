@@ -3,6 +3,17 @@ export const PASSWORD_RULES = {
   maxLength: 20,
 };
 
+export const RECIPE_RULES = {
+  titleMax: 20,
+  descriptionMax: 40,
+  ingredientMax: 15,
+  stepMax: 20,
+};
+
+export const GROUP_RULES = {
+  nameMax: 15,
+};
+
 export const isValidPassword = (password = '') => {
   const value = password.trim();
   if (value.length < PASSWORD_RULES.minLength || value.length > PASSWORD_RULES.maxLength) {

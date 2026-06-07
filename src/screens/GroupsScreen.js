@@ -10,6 +10,7 @@ import { commonStyles } from '../styles/common';
 import { listGroupsApi, getGroupApi, createGroupApi, updateGroupApi, deleteGroupApi } from '../services/groupsApi';
 import { listRecipesApi } from '../services/recipesApi';
 import { getAuthErrorMessage } from '../services/authMessages';
+import { GROUP_RULES } from '../utils/validation';
 
 const GroupsScreen = () => {
   const [groups, setGroups] = useState([]);
@@ -81,6 +82,11 @@ const GroupsScreen = () => {
   const handleSaveGroup = async () => {
     if (!groupName.trim()) {
       Alert.alert('Campo vacío', 'El grupo necesita un nombre.');
+      return;
+    }
+
+    if (groupName.trim().length > GROUP_RULES.nameMax) {
+      Alert.alert('Nombre muy largo', `El nombre del grupo no puede exceder ${GROUP_RULES.nameMax} caracteres.`);
       return;
     }
 
@@ -181,13 +187,14 @@ const GroupsScreen = () => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>{isEditing ? 'Editar Grupo' : 'Nuevo Grupo'}</Text>
 
-            <Text style={styles.subLabel}>Nombre del Grupo</Text>
+            <Text style={styles.subLabel}>Nombre del Grupo ({GROUP_RULES.nameMax} carac.)</Text>
             <TextInput
               placeholder="Ej. Comida Mexicana"
               placeholderTextColor="#999"
               value={groupName}
               onChangeText={setGroupName}
               style={styles.modalInput}
+              maxLength={GROUP_RULES.nameMax}
             />
 
             <CustomSearchSelect

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons'; 
 
-const CustomInput = ({ value, setValue, placeholder, secureTextEntry }) => {
+const CustomInput = ({ value, setValue, placeholder, secureTextEntry, maxLength, multiline }) => {
   const [isSecure, setIsSecure] = useState(secureTextEntry);
 
   return (
@@ -14,6 +14,8 @@ const CustomInput = ({ value, setValue, placeholder, secureTextEntry }) => {
         placeholderTextColor="#999"
         style={styles.input}
         secureTextEntry={isSecure}
+        maxLength={maxLength}
+        multiline={multiline}
       />
       
       {secureTextEntry && (

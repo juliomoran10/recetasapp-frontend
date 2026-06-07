@@ -9,6 +9,7 @@ import { commonStyles } from '../styles/common';
 import { createRecipeApi, updateRecipeApi } from '../services/recipesApi';
 import { listGroupsApi } from '../services/groupsApi';
 import { getAuthErrorMessage } from '../services/authMessages';
+import { RECIPE_RULES } from '../utils/validation';
 
 const CreateRecipeScreen = () => {
   const navigation = useNavigation();
@@ -55,6 +56,30 @@ const CreateRecipeScreen = () => {
       return;
     }
 
+    if (title.trim().length > RECIPE_RULES.titleMax) {
+      Alert.alert('Título muy largo', `El título no puede exceder ${RECIPE_RULES.titleMax} caracteres.`);
+      return;
+    }
+
+    if (description.trim().length > RECIPE_RULES.descriptionMax) {
+      Alert.alert('Descripción muy larga', `La descripción no puede exceder ${RECIPE_RULES.descriptionMax} caracteres.`);
+      return;
+    }
+
+    const ingredientList = ingredients.split(',').map(i => i.trim()).filter(Boolean);
+    const longIngredient = ingredientList.find(i => i.length > RECIPE_RULES.ingredientMax);
+    if (longIngredient) {
+      Alert.alert('Ingrediente muy largo', `Cada ingrediente debe tener máximo ${RECIPE_RULES.ingredientMax} caracteres.`);
+      return;
+    }
+
+    const stepList = steps.split('\n').map(s => s.trim()).filter(Boolean);
+    const longStep = stepList.find(s => s.length > RECIPE_RULES.stepMax);
+    if (longStep) {
+      Alert.alert('Paso muy largo', `Cada paso debe tener máximo ${RECIPE_RULES.stepMax} caracteres.`);
+      return;
+    }
+
     try {
       setSaving(true);
       const payload = {
@@ -98,20 +123,20 @@ const CreateRecipeScreen = () => {
           placeholderText="Subir foto del plato"
         />
 
-        <Text style={styles.label}>Título de la Receta</Text>
-        <CustomInput placeholder="Ej. Arepas de Queso" value={title} setValue={setTitle} />
+        <Text style={styles.label}>Título de la Receta ({RECIPE_RULES.titleMax} carac.)</Text>
+        <CustomInput placeholder="Ej. Arepas de Queso" value={title} setValue={setTitle} maxLength={RECIPE_RULES.titleMax} />
 
-        <Text style={styles.label}>Descripción breve</Text>
-        <CustomInput placeholder="Ej. Deliciosas arepas rellenas..." value={description} setValue={setDescription} />
+        <Text style={styles.label}>Descripción breve ({RECIPE_RULES.descriptionMax} carac.)</Text>
+        <CustomInput placeholder="Ej. Deliciosas arepas rellenas..." value={description} setValue={setDescription} maxLength={RECIPE_RULES.descriptionMax} />
 
         <Text style={styles.label}>Tiempo de preparación</Text>
         <CustomInput placeholder="Ej. 30 min" value={time} setValue={setTime} />
 
-        <Text style={styles.label}>Ingredientes (separados por coma)</Text>
+        <Text style={styles.label}>Ingredientes (separados por coma, máx. {RECIPE_RULES.ingredientMax} c/u)</Text>
         <CustomInput placeholder="Ej. Harina, Sal, Agua, Queso" value={ingredients} setValue={setIngredients} />
 
-        <Text style={styles.label}>Pasos a seguir</Text>
-        <CustomInput placeholder="Describe cómo prepararlo..." value={steps} setValue={setSteps} />
+        <Text style={styles.label}>Pasos a seguir (uno por línea, máx. {RECIPE_RULES.stepMax} c/u)</Text>
+        <CustomInput placeholder="Describe cómo prepararlo..." value={steps} setValue={setSteps} multiline />
 
         {loadingGroups ? (
           <ActivityIndicator color="#3B71F3" style={{ marginTop: 20 }} />

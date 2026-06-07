@@ -17,6 +17,7 @@ const ProfileScreen = () => {
 
   const [user, setUser] = useState({
     name: '',
+    username: '',
     email: '',
     avatar: null
   });
@@ -26,6 +27,7 @@ const ProfileScreen = () => {
 
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [inputName, setInputName] = useState('');
+  const [inputUsername, setInputUsername] = useState('');
   const [inputAvatar, setInputAvatar] = useState(null);
 
   const loadProfile = useCallback(async () => {
@@ -36,6 +38,7 @@ const ProfileScreen = () => {
 
       setUser({
         name: profile.name,
+        username: profile.username,
         email: profile.email,
         avatar: profile.avatar
       });
@@ -108,6 +111,7 @@ const ProfileScreen = () => {
 
   const openEditModal = () => {
     setInputName(user.name);
+    setInputUsername(user.username);
     setInputAvatar(user.avatar);
     setEditModalVisible(true);
   };
@@ -118,16 +122,23 @@ const ProfileScreen = () => {
       return;
     }
 
+    if (!inputUsername.trim()) {
+      Alert.alert('Campo vacío', 'El nombre de usuario no puede estar vacío.');
+      return;
+    }
+
     try {
       setSaving(true);
       const result = await updateProfileApi({
         name: inputName.trim(),
+        username: inputUsername.trim(),
         avatar: inputAvatar
       });
 
       const profile = result.profile;
       setUser({
         name: profile.name,
+        username: profile.username,
         email: profile.email,
         avatar: profile.avatar
       });
@@ -161,6 +172,7 @@ const ProfileScreen = () => {
           </View>
         )}
         <Text style={styles.userName}>{user.name}</Text>
+        <Text style={styles.userUsername}>@{user.username}</Text>
         <Text style={styles.userEmail}>{user.email}</Text>
       </View>
 
@@ -197,6 +209,16 @@ const ProfileScreen = () => {
               imageUri={inputAvatar}
               onImageSelected={setInputAvatar}
               placeholderText="Subir Foto"
+            />
+
+            <Text style={styles.subLabel}>Nombre de Usuario</Text>
+            <TextInput
+              placeholder="Tu usuario"
+              placeholderTextColor="#999"
+              value={inputUsername}
+              onChangeText={setInputUsername}
+              style={styles.modalInput}
+              autoCapitalize="none"
             />
 
             <Text style={styles.subLabel}>Nombre Completo</Text>
@@ -257,6 +279,7 @@ const styles = StyleSheet.create({
     color: '#4765A9'
   },
   userName: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 4 },
+  userUsername: { fontSize: 14, color: '#3B71F3', marginBottom: 2 },
   userEmail: { fontSize: 14, color: 'gray' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#051C60', marginBottom: 12, marginLeft: 5 },
   statsContainer: {
